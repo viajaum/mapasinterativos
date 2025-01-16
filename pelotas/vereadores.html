@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interativo de Votos - Pelotas - 2024</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Helvetica', sans-serif; /* Fonte sem serifa */
+    }
+    html, body {
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    #controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      width: 300px;
+    }
+    table {
+      position: absolute;
+      top: 140px;
+      right: 20px;
+      z-index: 1000;
+      width: 300px;
+      border-collapse: collapse;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 5px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: block;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    #totalVotes {
+      position: absolute;
+      top: 80px;
+      right: 20px;
+      z-index: 1000;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 16px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <div id="controls">
+    <label for="candidateSelect"></label>
+    <select id="candidateSelect">
+      <option value="">Selecione um candidato</option>
+    </select>
+  </div>
+
+  <div id="totalVotes">Total de Votos: </div>
+
+  <table id="votingTable">
+    <thead>
+      <tr>
+        <th>Local</th>
+        <th>Votos</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.1/papaparse.min.js"></script>
+  <script>
+    const map = L.map('map').setView([-31.6, -52.3424], 10); // Centralizado em Pelotas/RS
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const csvUrl = '1t.csv';
+    let allData = []; // Armazena todos os dados do CSV
+    const candidateColors = {}; // Objeto para armazenar as cores dos candidatos
+
+    // Função para gerar cores aleatórias
+    function getRandomColor() {
+      return `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+    }
+
+    // Carregar o CSV
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        allData = results.data; // Salvar todos os dados
+        populateCandidateSelect(allData); // Preencher a lista de candidatos
+      }
+    });
+
+    function populateCandidateSelect(data) {
+      const select = document.getElementById('candidateSelect');
+
+      // Filtrar apenas candidatos ao cargo de Vereador
+      const filteredData = data.filter(row => row.DS_CARGO_PERGUNTA === 'Vereador');
+
+      // Obter lista única de candidatos, ordenada alfabeticamente com localeCompare
+      const candidates = [...new Set(filteredData.map(row => row.NM_VOTAVEL))]
+        .sort((a, b) => a.localeCompare(b, 'pt', { sensitivity: 'base' })); // Ordenação com localeCompare
+
+      // Adicionar opções ao dropdown e gerar cores aleatórias
+      candidates.forEach(candidate => {
+        candidateColors[candidate] = getRandomColor(); // Atribuir cor aleatória ao candidato
+
+        const option = document.createElement('option');
+        option.value = candidate;
+        option.textContent = candidate;
+        select.appendChild(option);
+      });
+
+      // Evento de mudança no dropdown
+      select.addEventListener('change', (event) => {
+        const selectedCandidate = event.target.value;
+        updateMap(selectedCandidate);
+        updateTable(selectedCandidate);
+        updateTotalVotes(selectedCandidate);
+      });
+    }
+
+    function updateMap(candidate) {
+      map.eachLayer(layer => {
+        if (layer instanceof L.CircleMarker) {
+          map.removeLayer(layer);
+        }
+      });
+
+      // Calcular o total de votos por local para todos os candidatos
+      const localVotes = {};
+      allData.forEach(row => {
+        if (row.DS_CARGO_PERGUNTA === 'Vereador') { // Garantir que o voto é para vereador
+          const local = row.LOCAL;
+          const votos = parseInt(row.QT_VOTOS);
+          if (!isNaN(votos)) {
+            if (!localVotes[local]) {
+              localVotes[local] = 0;
+            }
+            localVotes[local] += votos;
+          }
+        }
+      });
+
+      if (candidate) {
+        const filteredData = allData.filter(row => row.NM_VOTAVEL === candidate);
+        const candidateColor = candidateColors[candidate]; // Obter a cor do candidato
+
+        filteredData.forEach(row => {
+          const lat = parseFloat(row.LATITUDE);
+          const lng = parseFloat(row.LONGITUDE);
+          const local = row.LOCAL;
+          const votos = parseInt(row.QT_VOTOS);
+
+          if (!isNaN(lat) && !isNaN(lng) && !isNaN(votos)) {
+            const radius = Math.sqrt(votos) * 2;
+
+            const totalVotosLocal = localVotes[local]; // Total de votos no local de todos os candidatos
+
+            const popupContent = `
+              <b>${local}</b> (${totalVotosLocal})<br>
+              <b>${votos}</b> 
+            `;
+            L.circleMarker([lat, lng], {
+              radius: radius,
+              color: candidateColor,
+              fillColor: candidateColor,
+              fillOpacity: 0.5,
+            }).addTo(map).bindPopup(popupContent);
+          }
+        });
+
+        // Centralizar sempre em Pelotas
+        map.setView([-31.6, -52.3424], 10);
+      }
+    }
+
+    function updateTable(candidate) {
+      const tableBody = document.querySelector('#votingTable tbody');
+      tableBody.innerHTML = '';
+
+      const localVotes = {}; // Objeto para armazenar os votos por local para todos os candidatos
+
+      allData.forEach(row => {
+        if (row.DS_CARGO_PERGUNTA === 'Vereador') { // Garantir que o voto é para vereador
+          const local = row.LOCAL;
+          const votos = parseInt(row.QT_VOTOS);
+
+          if (!localVotes[local]) {
+            localVotes[local] = 0;
+          }
+          localVotes[local] += votos;
+        }
+      });
+
+      // Exibir o total de votos por local
+      const filteredData = allData.filter(row => row.NM_VOTAVEL === candidate);
+
+      // Ordenar locais com base nos votos do candidato
+      const sortedLocals = [...new Set(filteredData.map(row => row.LOCAL))]
+        .sort((a, b) => {
+          const votosA = filteredData.filter(row => row.LOCAL === a).reduce((sum, row) => sum + parseInt(row.QT_VOTOS), 0);
+          const votosB = filteredData.filter(row => row.LOCAL === b).reduce((sum, row) => sum + parseInt(row.QT_VOTOS), 0);
+          return votosB - votosA; // Ordenação decrescente pelos votos do candidato
+        });
+
+      sortedLocals.forEach(local => {
+        const totalVotosLocal = localVotes[local]; // Total de votos no local de todos os candidatos
+
+        // Filtrar os votos do candidato no local
+        const candidateVotes = filteredData.filter(row => row.LOCAL === local)
+          .reduce((sum, row) => sum + parseInt(row.QT_VOTOS), 0);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${local} (${totalVotosLocal})</td> <!-- Exibir nome do local e total de votos -->
+          <td>${candidateVotes}</td> <!-- Votos do candidato -->
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function updateTotalVotes(candidate) {
+      const totalVotesElement = document.getElementById('totalVotes');
+
+      if (candidate) {
+        const totalVotes = allData
+          .filter(row => row.NM_VOTAVEL === candidate)
+          .reduce((sum, row) => sum + parseInt(row.QT_VOTOS), 0);
+
+        totalVotesElement.textContent = `Total de Votos: ${totalVotes}`;
+      } else {
+        totalVotesElement.textContent = 'Total de Votos: 0';
+      }
+    }
+  </script>
+</body>
+</html>

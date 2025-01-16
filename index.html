@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interativo de Votos</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+    }
+    header {
+        font-family: 'Helvetica', sans-serif; /* Fonte sem serifa */
+        background-color: #f4f4f4;
+    }
+
+    body {
+      font-family: 'Helvetica', sans-serif; /* Fonte sem serifa */
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      text-align: center;
+    }
+    h1 {
+      margin-top: 60px;
+    }
+    h2 {
+      margin-top: 10px;
+    }
+    .container {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: row; /* Alinha os itens em linha horizontal */
+      justify-content: center; /* Centraliza horizontalmente os itens */
+      align-items: center; /* Centraliza verticalmente os itens */
+      margin: 30px; /* Remove margens externas */
+    }
+
+    .buttonpel {
+      display: inline-block;
+      padding: 15px 30px;
+      margin: 10px;
+      background-color: #a4a4ff;
+      color: black;
+      text-decoration: none;
+      font-size: 18px;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+    }
+    .buttonpel:hover {
+      background-color: #7272fd;
+    }
+    .buttoncap {
+      display: inline-block;
+      padding: 15px 30px;
+      margin: 10px;
+      background-color: #ffa4a4;
+      color: black;
+      text-decoration: none;
+      font-size: 18px;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+    }
+    .buttoncap:hover {
+      background-color: #fd7272;
+    }
+
+    .contact {
+      margin-top: 30px;
+      font-size: 16px;
+    }
+    .contact a {
+      text-decoration: none; /* Remove o sublinhado */
+      color: black; /* Define a cor como preta */
+    }
+    .contact a:hover {
+      color: #7272fd; /* Adiciona cor de hover (opcional) */
+    }
+  </style>
+</head>
+
+<header>
+  <h1>Mapa Interativo de Votos</h1>
+  <h2>2024</h2>
+</header>
+
+  <body>
+  <div class="container">
+    <h3>Pelotas:</h3>
+    <a href="pelotas/vereadores.html" class="buttonpel">Vereadores</a>
+    <a href="pelotas/prefeitos1t.html" class="buttonpel">Prefeitos - 1º Turno</a>
+    <a href="pelotas/prefeitos2t.html" class="buttonpel">Prefeitos - 2º Turno</a>
+  </div>
+
+  <div class="container">
+    <h3>Capão do Leão:</h3>
+    <a href="capaodoleao/vereadores.html" class="buttoncap">Vereadores</a>
+    <a href="capaodoleao/prefeitos1t.html" class="buttoncap">Prefeitos</a>
+  </div>
+
+</body>
+<footer>
+    <div class="contact">
+        <p><a href="mailto:contato.viajaum@gmail.com">contato.viajaum@gmail.com</a></p>
+      </div>
+</footer>
+
+</html>

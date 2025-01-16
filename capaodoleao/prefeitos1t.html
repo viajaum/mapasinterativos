@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa Interativo de Votos - Capão do Leão - 2024</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Biblioteca Chart.js -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Helvetica', sans-serif; /* Fonte sem serifa */
+    }
+    html, body {
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+    #legend {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      background-color: rgba(255, 255, 255, 0.8);
+      padding: 10px;
+      border-radius: 5px;
+      width: 250px;
+      font-size: 14px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .legend-color-box {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="legend"></div> <!-- Legenda -->
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.1/papaparse.min.js"></script>
+  <script>
+    const map = L.map('map').setView([-31.75, -52.5], 12); // Centralizado em 
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    const csvUrl = '1t.csv'; // URL do CSV com os dados
+    let allData = []; // Armazena todos os dados do CSV
+    const candidateColors = {
+      'DAVID MARTINS': '#1981CD',
+      'JAQUES BORRACHA': '#8B0000',
+      'SCHMITT': '#800080',
+      'BRANCOS E NULOS': '#FFF8DC' // Cor para Brancos e Nulos
+    };
+
+    // Carregar o CSV
+    Papa.parse(csvUrl, {
+      download: true,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        allData = results.data; // Salvar todos os dados
+        updateMap(); // Atualizar o mapa com os dados
+        updateLegend(); // Atualizar a legenda com todos os candidatos
+      }
+    });
+
+    function updateMap() {
+      // Calcular o total de votos por local para todos os candidatos ao cargo de Prefeito
+      const localVotes = {};
+      const candidateVotesByLocal = {};
+
+      allData.forEach(row => {
+        if (row.DS_CARGO_PERGUNTA === 'Prefeito') { // Garantir que o voto é para prefeito
+          const local = row.LOCAL;
+          const votos = parseInt(row.QT_VOTOS);
+          const candidato = row.NM_VOTAVEL;
+
+          if (!isNaN(votos)) {
+            if (!localVotes[local]) {
+              localVotes[local] = 0;
+              candidateVotesByLocal[local] = {}; // Inicializar um objeto para armazenar os votos por candidato
+            }
+            localVotes[local] += votos;
+
+            if (!candidateVotesByLocal[local][candidato]) {
+              candidateVotesByLocal[local][candidato] = 0;
+            }
+            candidateVotesByLocal[local][candidato] += votos;
+          }
+        }
+      });
+
+      // Adicionar os círculos ao mapa para cada local
+      const filteredData = allData.filter(row => row.DS_CARGO_PERGUNTA === 'Prefeito');
+      
+      filteredData.forEach(row => {
+        const lat = parseFloat(row.LATITUDE);
+        const lng = parseFloat(row.LONGITUDE);
+        const local = row.LOCAL;
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const totalVotosLocal = localVotes[local]; // Total de votos no local de todos os candidatos
+
+          const radius = Math.sqrt(totalVotosLocal) * 0.2; // O tamanho do círculo será proporcional ao total de votos no local (ajustado para ser menor)
+
+          // Encontrar o candidato com mais votos no local
+          const candidateWithMaxVotes = Object.keys(candidateVotesByLocal[local]).reduce((max, candidate) => {
+            return candidateVotesByLocal[local][candidate] > candidateVotesByLocal[local][max] ? candidate : max;
+          });
+
+          // Obter a cor do candidato com mais votos
+          const color = candidateColors[candidateWithMaxVotes] || '#007bff';
+
+          const popupContent = `
+            <b>Local:</b> ${local} (${totalVotosLocal} votos)<br>
+            <canvas id="chart-${local}" width="200" height="200"></canvas> <!-- Gráfico de Pizza -->
+          `;
+
+          // Criar o círculo no mapa
+          const circle = L.circleMarker([lat, lng], {
+            radius: radius, // O raio ajustado
+            color: color, // Cor do círculo do candidato mais votado
+            fillColor: color,
+            fillOpacity: 0.5,
+          }).addTo(map).bindPopup(popupContent);
+
+          // Gerar o gráfico de pizza no popup
+          circle.on('popupopen', () => {
+            const ctx = document.getElementById(`chart-${local}`).getContext('2d');
+            const legendItems = []; // Array para armazenar os itens da legenda
+
+            const candidateVotes = filteredData.filter(r => r.LOCAL === local)
+              .map(r => ({ name: r.NM_VOTAVEL, votos: parseInt(r.QT_VOTOS) }));
+
+            // Somar votos "Nulo" e "Branco" para exibir juntos
+            const nuloVotes = filteredData.filter(r => r.NM_VOTAVEL === 'Nulo' && r.LOCAL === local)
+              .reduce((sum, r) => sum + parseInt(r.QT_VOTOS), 0);
+            const brancoVotes = filteredData.filter(r => r.NM_VOTAVEL === 'Branco' && r.LOCAL === local)
+              .reduce((sum, r) => sum + parseInt(r.QT_VOTOS), 0);
+
+            const totalNuloBranco = nuloVotes + brancoVotes;
+
+            // Remover "Nulo" e "Branco" da lista de candidatos para o gráfico
+            const filteredVotes = candidateVotes.filter(vote => vote.name !== 'Nulo' && vote.name !== 'Branco');
+
+            // Adicionar a categoria de "Nulo + Branco"
+            if (totalNuloBranco > 0) {
+              filteredVotes.push({ name: 'BRANCOS E NULOS', votos: totalNuloBranco });
+            }
+
+            const chart = new Chart(ctx, {
+              type: 'pie',
+              data: {
+                labels: filteredVotes.map(cv => cv.name),
+                datasets: [{
+                  label: 'Votação dos Candidatos',
+                  data: filteredVotes.map(cv => cv.votos),
+                  backgroundColor: filteredVotes.map(cv => candidateColors[cv.name] || '#007bff'), // Usar as cores definidas
+                  borderColor: '#ffffff',
+                  borderWidth: 1
+                }]
+              },
+              options: {
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: false, // Desabilitar a legenda no gráfico
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function(tooltipItem) {
+                        const total = tooltipItem.dataset.data.reduce((a, b) => a + b, 0); // Total de votos para calcular a porcentagem
+                        const percent = (tooltipItem.raw / total * 100).toFixed(1); // Calcular a porcentagem
+                        return tooltipItem.label + ': ' + tooltipItem.raw + ' votos (' + percent + '%)';
+                      }
+                    }
+                  }
+                }
+              }
+            });
+
+            // Preencher a legenda com todos os candidatos
+            updateLegend();
+          });
+        }
+      });
+      
+      // Centralizar o mapa sempre em
+      map.setView([-31.75, -52.5], 12);
+    }
+
+    // Função para atualizar a legenda com todos os candidatos
+    function updateLegend() {
+      const legendItems = [];
+      Object.keys(candidateColors).forEach((candidate) => {
+        const color = candidateColors[candidate];
+        legendItems.push(`
+          <div class="legend-item">
+            <div class="legend-color-box" style="background-color: ${color};"></div>
+            <span>${candidate}</span>
+          </div>
+        `);
+      });
+      // Adicionar a legenda ao elemento no canto inferior direito
+      document.getElementById('legend').innerHTML = legendItems.join('');
+    }
+  </script>
+</body>
+</html>
